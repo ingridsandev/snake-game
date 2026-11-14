@@ -45,6 +45,8 @@ No config. No accounts. No loot boxes. Just you, a snake, and your poor decision
   follow it as tightly as you like, just like the real thing.
 - **You can actually win.** Fill the entire board and you get a victory screen instead of an
   infinite loop. (Good luck.)
+- **Edges are portals.** Leave the board on one side and come back on the other. Your own body
+  is still on the other side, though, so look before you leap.
 - **It gets faster.** Every snack shaves a few milliseconds off the tick. Starts at a chill
   150ms, tops out at a frantic 60ms.
 - **Fits your terminal.** The board sizes itself to your window (up to 30×20). Shrink the
@@ -62,7 +64,7 @@ The game rules are pure Rust with zero terminal IO, so they're easy to test:
 cargo test
 ```
 
-Covers walls, self-bites, tail-chasing, sneaky double-tap reversals, food that never spawns
+Covers portal edges, self-bites, tail-chasing, sneaky double-tap reversals, food that never spawns
 inside you, and the elusive full-board win.
 
 ## 🗂️ What's where
@@ -79,7 +81,6 @@ planning/
 
 ## 🛣️ Maybe someday
 
-- Wrap-around walls (portal snake 🌀)
 - Board size from the command line
 - Something even fancier than a high score file
 

@@ -19,8 +19,14 @@ pub struct Board {
 }
 
 impl Board {
+    #[cfg(test)]
     pub fn contains(&self, p: Point) -> bool {
         p.x >= 0 && p.y >= 0 && p.x < self.width && p.y < self.height
+    }
+
+    /// Wraps a point that stepped off one edge onto the opposite edge.
+    pub fn wrap(&self, p: Point) -> Point {
+        Point::new(p.x.rem_euclid(self.width), p.y.rem_euclid(self.height))
     }
 }
 
@@ -128,12 +134,8 @@ impl Game {
             Some(d) if d != self.snake.direction().opposite() => d,
             _ => self.snake.direction(),
         };
-        let new_head = self.snake.head().step(dir);
-
-        if !self.board.contains(new_head) {
-            self.state = GameState::GameOver;
-            return;
-        }
+        // Edges wrap: stepping off one side re-enters on the opposite side.
+        let new_head = self.board.wrap(self.snake.head().step(dir));
 
         let eating = new_head == self.food.position;
         if self.snake.would_collide(new_head, eating) {
@@ -197,31 +199,53 @@ mod tests {
     }
 
     #[test]
-    fn wall_collision_right() {
+    fn wraps_right_to_left() {
         let mut g = with_snake(5, 5, &[p(4, 2), p(3, 2)], Direction::Right);
         g.update(None);
-        assert_eq!(g.state, GameState::GameOver);
+        assert_eq!(g.state, GameState::Running);
+        assert_eq!(g.snake.head(), p(0, 2));
     }
 
     #[test]
-    fn wall_collision_left() {
+    fn wraps_left_to_right() {
         let mut g = with_snake(5, 5, &[p(0, 2), p(1, 2)], Direction::Left);
         g.update(None);
-        assert_eq!(g.state, GameState::GameOver);
+        assert_eq!(g.state, GameState::Running);
+        assert_eq!(g.snake.head(), p(4, 2));
     }
 
     #[test]
-    fn wall_collision_top() {
+    fn wraps_top_to_bottom() {
         let mut g = with_snake(5, 5, &[p(2, 0), p(2, 1)], Direction::Up);
         g.update(None);
+        assert_eq!(g.state, GameState::Running);
+        assert_eq!(g.snake.head(), p(2, 4));
+    }
+
+    #[test]
+    fn wraps_bottom_to_top() {
+        let mut g = with_snake(5, 5, &[p(2, 4), p(2, 3)], Direction::Down);
+        g.update(None);
+        assert_eq!(g.state, GameState::Running);
+        assert_eq!(g.snake.head(), p(2, 0));
+    }
+
+    #[test]
+    fn wrapping_into_own_body_still_kills() {
+        // Head at the right edge; the body sits on the left edge of that row.
+        let mut g = with_snake(4, 3, &[p(3, 1), p(3, 0), p(2, 0), p(1, 0), p(0, 0), p(0, 1), p(0, 2)], Direction::Down);
+        g.food.position = p(1, 2);
+        g.update(Some(Direction::Right)); // wraps to (0,1): a body segment
         assert_eq!(g.state, GameState::GameOver);
     }
 
     #[test]
-    fn wall_collision_bottom() {
-        let mut g = with_snake(5, 5, &[p(2, 4), p(2, 3)], Direction::Down);
+    fn wrapping_onto_food_eats_it() {
+        let mut g = with_snake(5, 5, &[p(4, 2), p(3, 2)], Direction::Right);
+        g.food.position = p(0, 2);
         g.update(None);
-        assert_eq!(g.state, GameState::GameOver);
+        assert_eq!(g.score, 1);
+        assert_eq!(g.snake.len(), 3);
     }
 
     #[test]
