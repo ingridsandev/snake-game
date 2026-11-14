@@ -92,8 +92,9 @@ silent exit with no diagnostic.
 
 ## Collision & Rules
 
-- **Wall collision**: head goes outside board bounds → game over (classic mode; a "wrap-around"
-  variant can be a later option).
+- **Edges wrap around**: a head that steps off one edge re-enters on the opposite edge
+  (`Board::wrap`, using `rem_euclid`). There are no deadly walls. Self-collision and food checks
+  run on the wrapped position.
 - **Self collision**: pop the tail *first*, then test the new head against the remaining body.
   When the snake isn't growing, the tail vacates its cell on the same tick, so moving into the
   cell the tail currently occupies is legal — and is what classic Snake does. Checking against
@@ -155,7 +156,7 @@ The valuable logic here is pure, so keep it that way:
 
 Tests worth writing from milestone 3 onward:
 
-- Wall collision at each of the four bounds.
+- Wrap-around at each of the four edges.
 - Moving into the current tail cell is legal when not growing (the rule above).
 - The two-tap reversal is rejected (`Right` → `Up` → `Left` within one tick).
 - A buffered two-tap turn is applied across two consecutive ticks, not dropped.
@@ -169,7 +170,7 @@ Tests worth writing from milestone 3 onward:
    guard, empty game loop that clears the screen and exits on `q`.
 2. **Static rendering** — board border, snake at a fixed position, food at a fixed position,
    2:1 cell mapping in place.
-3. **Movement** — snake moves each tick in its current direction; wall collision ends the game.
+3. **Movement** — snake moves each tick in its current direction; edges wrap around.
    First unit tests land here.
 4. **Input handling** — arrow keys change direction (reversal guard against committed direction,
    2-deep buffer).
@@ -183,7 +184,7 @@ Tests worth writing from milestone 3 onward:
 
 ## Open Questions / Options for Later
 
-- Wrap-around walls vs. hard walls (toggle?).
+- ~~Wrap-around walls vs. hard walls (toggle?)~~ Done: edges always wrap.
 - Configurable board size via CLI args (`clap`) if desired.
 - Whether the high-score file should move to a platform data dir (`directories` crate) instead
   of `~/.snake-game/`.
