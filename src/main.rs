@@ -1,6 +1,7 @@
 mod game;
 mod render;
 mod snake;
+mod theme;
 
 use std::fs;
 use std::io::{self, Stdout, Write};
@@ -13,7 +14,10 @@ use crossterm::{cursor, execute};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use chrono::{Local, NaiveDate};
 use game::{Board, Game, GameState};
+use render::Look;
+use theme::Theme;
 use snake::Direction;
 
 /// Largest board we'll use; smaller terminals get a board that fits.
@@ -111,7 +115,7 @@ fn handle_key(game: &mut Game, key: KeyEvent) -> Action {
     Action::Continue
 }
 
-fn run(out: &mut Stdout) -> io::Result<()> {
+fn run(out: &mut Stdout, look: Look) -> io::Result<()> {
     let mut size = terminal::size()?;
     let mut game = Game::new(board_for(size.0, size.1), StdRng::from_os_rng());
     let mut high_score = load_high_score();
@@ -134,7 +138,7 @@ fn run(out: &mut Stdout) -> io::Result<()> {
             if too_small {
                 render::draw_too_small(out, need, size)?;
             } else {
-                render::draw(out, &game, high_score.max(game.score))?;
+                render::draw(out, &game, high_score.max(game.score), look)?;
             }
             dirty = false;
         }
@@ -197,11 +201,147 @@ fn run(out: &mut Stdout) -> io::Result<()> {
     Ok(())
 }
 
+const USAGE: &str = "\
+Usage: snake-game [--theme <name>] [--ascii]
+
+  --theme <name>  Pick a theme. `--theme list` shows them all.
+                  Without it, holidays pick their own theme automatically.
+                  Use `--theme classic` to turn holiday themes off.
+  --ascii         Plain-text food and titles, for terminals that draw emoji badly.
+  -h, --help      Show this help.";
+
+#[derive(Debug, PartialEq)]
+enum Command {
+    Play { theme: Option<&'static Theme>, ascii: bool },
+    ListThemes,
+    Help,
+}
+
+fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<Command, String> {
+    let mut theme = None;
+    let mut ascii = false;
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        let (flag, inline) = match arg.split_once('=') {
+            Some((f, v)) => (f.to_string(), Some(v.to_string())),
+            None => (arg.clone(), None),
+        };
+        match flag.as_str() {
+            "--theme" | "-t" => {
+                let name = inline
+                    .or_else(|| args.next())
+                    .ok_or("--theme needs a name (try `--theme list`)")?;
+                if name == "list" {
+                    return Ok(Command::ListThemes);
+                }
+                theme = Some(theme::by_name(&name).ok_or_else(|| {
+                    format!("Unknown theme `{name}`. Try `--theme list`.")
+                })?);
+            }
+            "--ascii" => ascii = true,
+            "-h" | "--help" => return Ok(Command::Help),
+            _ => return Err(format!("Unknown option: {arg}")),
+        }
+    }
+    Ok(Command::Play { theme, ascii })
+}
+
+/// `--theme` wins; otherwise today's holiday, if any; otherwise classic.
+fn resolve_theme(chosen: Option<&'static Theme>, today: NaiveDate) -> &'static Theme {
+    chosen.or_else(|| theme::holiday_for(today)).unwrap_or(&theme::CLASSIC)
+}
+
+/// Left-aligns `s` to `width` terminal columns (emoji count as 2).
+fn pad(s: &str, width: usize) -> String {
+    use unicode_width::UnicodeWidthStr;
+    format!("{s}{}", " ".repeat(width.saturating_sub(s.width())))
+}
+
+fn list_themes(today: NaiveDate) {
+    let active = resolve_theme(None, today);
+    println!("Themes (today: {}):\n", active.name);
+    for t in theme::ALL {
+        let food: String = t.food.iter().map(|f| f.emoji).collect::<Vec<_>>().join(" ");
+        let marker = if *t == active { "▶" } else { " " };
+        println!("{marker} {} {} {} {}", pad(t.name, 13), pad(&food, 12), pad(t.when, 38), t.title.trim());
+    }
+    println!("\nPlay one with: snake-game --theme <name>");
+}
+
 fn main() -> io::Result<()> {
+    let today = Local::now().date_naive();
+    let look = match parse_args(std::env::args().skip(1)) {
+        Ok(Command::Play { theme, ascii }) => Look { theme: resolve_theme(theme, today), ascii },
+        Ok(Command::ListThemes) => {
+            list_themes(today);
+            return Ok(());
+        }
+        Ok(Command::Help) => {
+            println!("{USAGE}");
+            return Ok(());
+        }
+        Err(msg) => {
+            eprintln!("{msg}\n\n{USAGE}");
+            std::process::exit(2);
+        }
+    };
+
     install_panic_hook();
     let mut out = io::stdout();
     let _guard = TerminalGuard::enter(&mut out)?;
-    let result = run(&mut out);
+    let result = run(&mut out, look);
     out.flush()?;
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Command, String> {
+        parse_args(args.iter().map(|s| s.to_string()))
+    }
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn no_args_plays_with_auto_theme() {
+        assert_eq!(parse(&[]), Ok(Command::Play { theme: None, ascii: false }));
+    }
+
+    #[test]
+    fn theme_flag_both_spellings() {
+        let want = Ok(Command::Play { theme: Some(&theme::HALLOWEEN), ascii: false });
+        assert_eq!(parse(&["--theme", "halloween"]), want);
+        assert_eq!(parse(&["--theme=halloween"]), want);
+        assert_eq!(parse(&["-t", "Halloween"]), want);
+    }
+
+    #[test]
+    fn ascii_flag() {
+        assert_eq!(
+            parse(&["--ascii", "--theme", "carnaval"]),
+            Ok(Command::Play { theme: Some(&theme::CARNAVAL), ascii: true })
+        );
+    }
+
+    #[test]
+    fn list_help_and_errors() {
+        assert_eq!(parse(&["--theme", "list"]), Ok(Command::ListThemes));
+        assert_eq!(parse(&["--help"]), Ok(Command::Help));
+        assert!(parse(&["--theme"]).is_err());
+        assert!(parse(&["--theme", "nope"]).is_err());
+        assert!(parse(&["--walls"]).is_err());
+    }
+
+    #[test]
+    fn flag_beats_holiday_and_classic_turns_holidays_off() {
+        let christmas_day = date(2026, 12, 25);
+        assert_eq!(resolve_theme(None, christmas_day).name, "christmas");
+        assert_eq!(resolve_theme(Some(&theme::CARNAVAL), christmas_day).name, "carnaval");
+        assert_eq!(resolve_theme(Some(&theme::CLASSIC), christmas_day).name, "classic");
+        assert_eq!(resolve_theme(None, date(2026, 11, 14)).name, "classic");
+    }
 }
