@@ -26,6 +26,42 @@ cargo run --release
 
 No config. No accounts. No loot boxes. Just you, a snake, and your poor decisions.
 
+## 🎉 Holiday themes
+
+The snake dresses up for the holidays **all by itself**: start the game on a holiday and the
+theme switches on automatically. Each theme brings its own snake stripes, snacks, border and
+dramatic game-over line.
+
+| Theme | Shows up automatically | Snacks | When you crash |
+|---|---|---|---|
+| 🎭 `carnaval` | Saturday → Ash Wednesday | 🎭 🥁 🎉 🍹 | *"A festa acabou!"* |
+| 💘 `valentines` | Feb 14 | 💖 🍫 🌹 | *"Heartbroken."* |
+| 🍀 `st-patricks` | Mar 17 | 🍀 🪙 🌈 | *"Out of luck."* |
+| 🐣 `easter` | Good Friday → Easter Monday | 🥚 🐣 🥕 | *"The bunny wins."* |
+| 🎃 `halloween` | Oct 24 → 31 | 🎃 🍬 👻 | *"The ghosts got you."* |
+| 🦃 `thanksgiving` | 4th Thursday of November | 🥧 🌽 🦃 | *"Stuffed."* |
+| 🎄 `christmas` | Dec 1 → 26 (candy-cane snake!) | 🎁 🍪 ⭐ | *"Coal for you this year."* |
+| 🎆 `new-year` | Dec 31 → Jan 1 | 🎆 🥂 🎉 | *"Better luck in the new year!"* |
+| 🐍 `classic` | every other day | 🍎 | *"The snake bit the dust."* |
+
+Can't wait for the party? Pick any theme, any day:
+
+```bash
+cargo run --release -- --theme carnaval     # 🎭 bora!
+cargo run --release -- --theme list         # see them all (and which one is on today)
+cargo run --release -- --theme classic      # holiday-proof: always the classic look
+```
+
+Easter and Carnaval move around every year; the game works them out itself (Carnaval is 47 days
+before Easter, so when it lands on Valentine's Day, the samba wins 🥁).
+
+**Emoji looking wonky?** Some terminals draw emoji at the wrong width, which nudges the board
+out of line. Add `--ascii` for plain-text snacks that line up everywhere:
+
+```bash
+cargo run --release -- --theme halloween --ascii
+```
+
 ## 🎮 Controls
 
 | Key | What it does |
@@ -64,7 +100,7 @@ The game rules are pure Rust with zero terminal IO, so they're easy to test:
 cargo test
 ```
 
-Covers portal edges, self-bites, tail-chasing, sneaky double-tap reversals, food that never spawns
+Covers holiday dates (including where Easter and Carnaval land), theme flags, portal edges, self-bites, tail-chasing, sneaky double-tap reversals, food that never spawns
 inside you, and the elusive full-board win.
 
 ## 🗂️ What's where
@@ -74,7 +110,8 @@ src/
 ├── main.rs    # terminal setup, game loop, high score, "please don't break my terminal"
 ├── game.rs    # the rules: movement, collisions, food, winning, speed
 ├── snake.rs   # the noodle itself
-└── render.rs  # turns state into pretty boxes
+├── render.rs  # turns state into pretty boxes
+└── theme.rs   # holiday themes + the calendar math that picks them
 planning/
 └── implementation-plan.md   # how it was designed, milestone by milestone
 ```
